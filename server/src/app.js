@@ -20,6 +20,7 @@ import purchaseRoutes from './routes/purchaseRoutes.js';
 import costingRoutes from './routes/costingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use('/api/v1/purchases', purchaseRoutes);
 app.use('/api/v1/costing', costingRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 
 // 404 & Global Error Handler
 app.use(notFoundHandler);

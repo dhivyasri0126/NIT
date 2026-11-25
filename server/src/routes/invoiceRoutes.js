@@ -76,61 +76,103 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
   }
 });
 
-// POST generate invoice from order
+// Helper function to create invoice from order
+async function createInvoiceFromOrder(orderId, userId) {
+  return await withTransaction(async (client) => {
+    const orderRes = await client.query(`SELECT * FROM erp.orders WHERE id = $1`, [orderId]);
+    if (orderRes.rows.length === 0) {
+      throw new Error(`Order not found: ${orderId}`);
+    }
+    const order = orderRes.rows[0];
+
+    // Rule: Never generate an invoice for an unapproved order
+    if (order.status !== 'Approved' && order.status !== 'Dispatched') {
+      throw new Error(`Cannot invoice unapproved order. Current status: ${order.status}`);
+    }
+
+    const countRes = await client.query('SELECT count(*) FROM erp.invoices');
+    const invNo = `INV-${String(parseInt(countRes.rows[0].count) + 15).padStart(4, '0')}`;
+
+    const qrCode = `GSTIN:33ABCDE1234F1Z5;INV:${invNo};DATE:${new Date().toISOString().split('T')[0]};VAL:${order.total_amount}`;
+
+    const insertInvSql = `
+      INSERT INTO erp.invoices (
+        id, invoice_no, order_id, order_no, customer_id, customer_name, customer_address, customer_gstin,
+        invoice_date, place_of_supply, taxable_value, cgst, sgst, igst, total,
+        paid_amount, outstanding_amount, status, qr_code_value
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE, 'Tamil Nadu (TN)', $9, $10, $11, $12, $13, 0, $14, 'Unpaid', $15)
+      RETURNING *
+    `;
+
+    const newInv = await client.query(insertInvSql, [
+      invNo, invNo, order.id, order.order_no, order.customer_id, order.customer_name,
+      order.customer_address, order.customer_gstin, order.taxable_amount,
+      order.cgst_total, order.sgst_total, order.igst_total, order.total_amount,
+      order.total_amount, qrCode
+    ]);
+
+    const itemsRes = await client.query(`SELECT * FROM erp.order_items WHERE order_id = $1`, [order.id]);
+    let sNo = 1;
+    for (const it of itemsRes.rows) {
+      await client.query(`
+        INSERT INTO erp.invoice_items (
+          invoice_id, s_no, product_id, product_name, hsn, quantity, rate, taxable,
+          cgst_rate, cgst_amount, sgst_rate, sgst_amount, amount
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `, [
+        invNo, sNo++, it.product_id, it.product_name, it.hsn, it.quantity, it.rate,
+        it.taxable, it.cgst_rate, it.cgst_amount, it.sgst_rate, it.sgst_amount, it.total_amount
+      ]);
+    }
+
+    // Update order status
+    await client.query(
+      `UPDATE erp.orders SET status = 'Invoiced', invoice_no = $1, invoice_date = CURRENT_DATE WHERE id = $2`,
+      [invNo, order.id]
+    );
+
+    // Update customer outstanding receivables
+    await client.query(`
+      UPDATE erp.customers
+      SET outstanding_balance = outstanding_balance + $1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `, [order.total_amount, order.customer_id]);
+
+    // Audit log
+    await client.query(`
+      INSERT INTO erp.audit_logs (user_id, action, entity_type, entity_id, new_values)
+      VALUES ($1, 'GENERATE_INVOICE', 'INVOICE', $2, $3)
+    `, [userId || 'USR-ADMIN-01', invNo, JSON.stringify({ orderId, total: order.total_amount })]);
+
+    return newInv.rows[0];
+  });
+}
+
+// POST create/generate invoice (standard REST endpoint)
+router.post('/', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      return ApiResponse.error(res, 'orderId is required to generate invoice', [], 400);
+    }
+    const invoice = await createInvoiceFromOrder(orderId, req.user?.id);
+    return ApiResponse.success(res, invoice, 'GST Tax invoice generated successfully', 201);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST generate invoice from order (explicit alias)
 router.post('/generate-from-order', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const { orderId } = req.body;
-
-    const invoice = await withTransaction(async (client) => {
-      const orderRes = await client.query(`SELECT * FROM erp.orders WHERE id = $1`, [orderId]);
-      if (orderRes.rows.length === 0) throw new Error(`Order not found: ${orderId}`);
-      const order = orderRes.rows[0];
-
-      const countRes = await client.query('SELECT count(*) FROM erp.invoices');
-      const invNo = `INV-${String(parseInt(countRes.rows[0].count) + 15).padStart(4, '0')}`;
-
-      const qrCode = `GSTIN:33ABCDE1234F1Z5;INV:${invNo};DATE:${new Date().toISOString().split('T')[0]};VAL:${order.total_amount}`;
-
-      const insertInvSql = `
-        INSERT INTO erp.invoices (
-          id, invoice_no, order_id, order_no, customer_id, customer_name, customer_address, customer_gstin,
-          invoice_date, place_of_supply, taxable_value, cgst, sgst, igst, total,
-          paid_amount, outstanding_amount, status, qr_code_value
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE, 'Tamil Nadu (TN)', $9, $10, $11, $12, $13, 0, $14, 'Unpaid', $15)
-        RETURNING *
-      `;
-
-      const newInv = await client.query(insertInvSql, [
-        invNo, invNo, order.id, order.order_no, order.customer_id, order.customer_name,
-        order.customer_address, order.customer_gstin, order.taxable_amount,
-        order.cgst_total, order.sgst_total, order.igst_total, order.total_amount,
-        order.total_amount, qrCode
-      ]);
-
-      const itemsRes = await client.query(`SELECT * FROM erp.order_items WHERE order_id = $1`, [order.id]);
-      let sNo = 1;
-      for (const it of itemsRes.rows) {
-        await client.query(`
-          INSERT INTO erp.invoice_items (
-            invoice_id, s_no, product_id, product_name, hsn, quantity, rate, taxable,
-            cgst_rate, cgst_amount, sgst_rate, sgst_amount, amount
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        `, [
-          invNo, sNo++, it.product_id, it.product_name, it.hsn, it.quantity, it.rate,
-          it.taxable, it.cgst_rate, it.cgst_amount, it.sgst_rate, it.sgst_amount, it.total_amount
-        ]);
-      }
-
-      await client.query(
-        `UPDATE erp.orders SET status = 'Invoiced', invoice_no = $1, invoice_date = CURRENT_DATE WHERE id = $2`,
-        [invNo, order.id]
-      );
-
-      return newInv.rows[0];
-    });
-
+    if (!orderId) {
+      return ApiResponse.error(res, 'orderId is required', [], 400);
+    }
+    const invoice = await createInvoiceFromOrder(orderId, req.user?.id);
     return ApiResponse.success(res, invoice, 'GST Tax invoice generated successfully', 201);
   } catch (err) {
     next(err);

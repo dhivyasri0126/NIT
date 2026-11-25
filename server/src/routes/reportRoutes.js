@@ -5,7 +5,140 @@ import { ApiResponse } from '../utils/apiResponse.js';
 
 const router = Router();
 
-// GET Sales and GST summary
+// GET Sales register with customer breakdowns
+router.get('/sales', authenticateToken, async (req, res, next) => {
+  try {
+    const { startDate, endDate, customerId } = req.query;
+    let sql = `
+      SELECT
+        o.id,
+        o.order_no,
+        o.order_date,
+        o.customer_name,
+        o.salesman_name,
+        o.status,
+        o.taxable_amount,
+        o.cgst_total,
+        o.sgst_total,
+        o.total_amount,
+        o.invoice_no,
+        o.dispatch_status
+      FROM erp.orders o
+      WHERE 1=1
+    `;
+    const params = [];
+    if (customerId) {
+      params.push(customerId);
+      sql += ` AND o.customer_id = $${params.length}`;
+    }
+    if (startDate) {
+      params.push(startDate);
+      sql += ` AND o.order_date >= $${params.length}`;
+    }
+    if (endDate) {
+      params.push(endDate);
+      sql += ` AND o.order_date <= $${params.length}`;
+    }
+    sql += ` ORDER BY o.order_date DESC, o.created_at DESC`;
+
+    const salesRes = await query(sql, params);
+    return ApiResponse.success(res, salesRes.rows, 'Sales register retrieved');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET Purchase register with supplier details
+router.get('/purchases', authenticateToken, async (req, res, next) => {
+  try {
+    const purchasesRes = await query(`
+      SELECT
+        p.id,
+        p.po_number,
+        p.supplier_name,
+        p.order_date,
+        p.invoice_ref,
+        p.total_amount,
+        p.status,
+        p.payment_status,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'itemName', pi.item_name,
+              'quantity', pi.quantity,
+              'unit', pi.unit_id,
+              'rate', pi.unit_price,
+              'amount', pi.total_amount
+            )
+          ) FILTER (WHERE pi.id IS NOT NULL), '[]'
+        ) as items
+      FROM erp.purchases p
+      LEFT JOIN erp.purchase_items pi ON p.id = pi.purchase_id
+      GROUP BY p.id
+      ORDER BY p.order_date DESC
+    `);
+    return ApiResponse.success(res, purchasesRes.rows, 'Purchase register retrieved');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET Inventory status & movements
+router.get('/inventory', authenticateToken, async (req, res, next) => {
+  try {
+    const invRes = await query(`
+      SELECT
+        item_type,
+        item_id,
+        item_name,
+        unit_id,
+        opening_stock,
+        total_inward,
+        total_outward,
+        current_stock,
+        reorder_level,
+        avg_cost,
+        ROUND((current_stock * avg_cost)::numeric, 2) as valuation,
+        status,
+        (current_stock <= reorder_level) as is_low_stock
+      FROM erp.inventory_items
+      ORDER BY item_type, item_name
+    `);
+    return ApiResponse.success(res, invRes.rows, 'Inventory report retrieved');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET Production yield summary
+router.get('/production', authenticateToken, async (req, res, next) => {
+  try {
+    const prodRes = await query(`
+      SELECT
+        pr.id,
+        pr.run_number,
+        pr.batch_no,
+        pr.product_name,
+        pr.date,
+        pr.planned_output,
+        pr.actual_output,
+        pr.wastage_qty,
+        pr.efficiency_percent,
+        pr.supervisor_name,
+        pr.status,
+        po.total_cost,
+        po.unit_cost
+      FROM erp.production_runs pr
+      LEFT JOIN erp.production_overheads po ON pr.id = po.production_run_id
+      ORDER BY pr.date DESC
+    `);
+    return ApiResponse.success(res, prodRes.rows, 'Production report retrieved');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET GST tax summary
 router.get('/gst-summary', authenticateToken, async (req, res, next) => {
   try {
     const summaryRes = await query(`
@@ -39,6 +172,80 @@ router.get('/stock-summary', authenticateToken, async (req, res, next) => {
       GROUP BY item_type
     `);
     return ApiResponse.success(res, stockRes.rows, 'Stock valuation summary');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET Material & yield variance report
+router.get('/variance', authenticateToken, async (req, res, next) => {
+  try {
+    const varianceRes = await query(`
+      SELECT
+        pr.batch_no,
+        pr.product_name,
+        pr.date,
+        pmi.material_name,
+        pmi.unit_id,
+        pmi.planned_qty,
+        pmi.actual_qty,
+        pmi.variance_qty,
+        pmi.variance_percent,
+        (pmi.variance_percent > 3.0 OR pmi.variance_percent < -3.0) as is_significant_variance
+      FROM erp.production_material_issues pmi
+      JOIN erp.production_runs pr ON pmi.production_run_id = pr.id
+      ORDER BY pr.date DESC, pmi.id ASC
+    `);
+    return ApiResponse.success(res, varianceRes.rows, 'Variance report retrieved');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET Product profitability report
+router.get('/costing', authenticateToken, async (req, res, next) => {
+  try {
+    const costingRes = await query(`
+      SELECT
+        p.id,
+        p.name,
+        p.category,
+        p.selling_price,
+        p.cost_price,
+        ROUND((p.selling_price - p.cost_price)::numeric, 2) as profit_per_unit,
+        ROUND((((p.selling_price - p.cost_price) / p.selling_price) * 100)::numeric, 1) as margin_percent,
+        p.current_stock,
+        ROUND((p.current_stock * p.cost_price)::numeric, 2) as inventory_valuation
+      FROM erp.products p
+      ORDER BY margin_percent DESC
+    `);
+    return ApiResponse.success(res, costingRes.rows, 'Costing and profitability report');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET Audit logs
+router.get('/audit-logs', authenticateToken, async (req, res, next) => {
+  try {
+    const logsRes = await query(`
+      SELECT
+        al.id,
+        al.action,
+        al.entity_type,
+        al.entity_id,
+        al.old_values,
+        al.new_values,
+        al.ip_address,
+        al.created_at,
+        u.name as user_name,
+        u.email as user_email
+      FROM erp.audit_logs al
+      LEFT JOIN erp.users u ON al.user_id = u.id
+      ORDER BY al.created_at DESC
+      LIMIT 100
+    `);
+    return ApiResponse.success(res, logsRes.rows, 'Audit trail retrieved');
   } catch (err) {
     next(err);
   }
