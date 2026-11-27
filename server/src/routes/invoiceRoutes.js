@@ -77,7 +77,7 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 });
 
 // Helper function to create invoice from order
-async function createInvoiceFromOrder(orderId, userId) {
+async function createInvoiceFromOrder(orderId, user) {
   return await withTransaction(async (client) => {
     const orderRes = await client.query(`SELECT * FROM erp.orders WHERE id = $1`, [orderId]);
     if (orderRes.rows.length === 0) {
@@ -85,7 +85,10 @@ async function createInvoiceFromOrder(orderId, userId) {
     }
     const order = orderRes.rows[0];
 
-    // Rule: Never generate an invoice for an unapproved order
+    // Rule: Never generate an invoice for an unapproved order or already invoiced order
+    if (order.invoice_no) {
+      throw new Error(`Order ${order.order_no} is already invoiced (${order.invoice_no})`);
+    }
     if (order.status !== 'Approved' && order.status !== 'Dispatched') {
       throw new Error(`Cannot invoice unapproved order. Current status: ${order.status}`);
     }
@@ -95,19 +98,24 @@ async function createInvoiceFromOrder(orderId, userId) {
 
     const qrCode = `GSTIN:33ABCDE1234F1Z5;INV:${invNo};DATE:${new Date().toISOString().split('T')[0]};VAL:${order.total_amount}`;
 
+    // Determine place of supply from customer state
+    const custRes = await client.query(`SELECT state FROM erp.customers WHERE id = $1`, [order.customer_id]);
+    const custState = custRes.rows[0]?.state || 'Tamil Nadu';
+    const placeOfSupply = custState === 'Tamil Nadu' ? 'Tamil Nadu (TN)' : `${custState} (Interstate)`;
+
     const insertInvSql = `
       INSERT INTO erp.invoices (
         id, invoice_no, order_id, order_no, customer_id, customer_name, customer_address, customer_gstin,
         invoice_date, place_of_supply, taxable_value, cgst, sgst, igst, total,
         paid_amount, outstanding_amount, status, qr_code_value
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE, 'Tamil Nadu (TN)', $9, $10, $11, $12, $13, 0, $14, 'Unpaid', $15)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE, $9, $10, $11, $12, $13, $14, 0, $15, 'Unpaid', $16)
       RETURNING *
     `;
 
     const newInv = await client.query(insertInvSql, [
       invNo, invNo, order.id, order.order_no, order.customer_id, order.customer_name,
-      order.customer_address, order.customer_gstin, order.taxable_amount,
+      order.customer_address, order.customer_gstin, placeOfSupply, order.taxable_amount,
       order.cgst_total, order.sgst_total, order.igst_total, order.total_amount,
       order.total_amount, qrCode
     ]);
@@ -143,22 +151,22 @@ async function createInvoiceFromOrder(orderId, userId) {
 
     // Audit log
     await client.query(`
-      INSERT INTO erp.audit_logs (user_id, action, entity_type, entity_id, new_values)
-      VALUES ($1, 'GENERATE_INVOICE', 'INVOICE', $2, $3)
-    `, [userId || 'USR-ADMIN-01', invNo, JSON.stringify({ orderId, total: order.total_amount })]);
+      INSERT INTO erp.audit_logs (user_id, user_name, action, module, entity_id, details)
+      VALUES ($1, $2, 'GENERATE_INVOICE', 'FINANCE', $3, $4)
+    `, [user?.id || 'USR-ADMIN-01', user?.name || 'Admin', invNo, JSON.stringify({ orderId, total: order.total_amount })]);
 
     return newInv.rows[0];
   });
 }
 
-// POST create/generate invoice (standard REST endpoint)
-router.post('/', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
+// POST create/generate invoice (Factory Admin / Owner only; Auditor is read-only)
+router.post('/', authenticateToken, authorizeRoles('ADMIN', 'OWNER'), async (req, res, next) => {
   try {
     const { orderId } = req.body;
     if (!orderId) {
       return ApiResponse.error(res, 'orderId is required to generate invoice', [], 400);
     }
-    const invoice = await createInvoiceFromOrder(orderId, req.user?.id);
+    const invoice = await createInvoiceFromOrder(orderId, req.user);
     return ApiResponse.success(res, invoice, 'GST Tax invoice generated successfully', 201);
   } catch (err) {
     next(err);
@@ -166,13 +174,13 @@ router.post('/', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'),
 });
 
 // POST generate invoice from order (explicit alias)
-router.post('/generate-from-order', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
+router.post('/generate-from-order', authenticateToken, authorizeRoles('ADMIN', 'OWNER'), async (req, res, next) => {
   try {
     const { orderId } = req.body;
     if (!orderId) {
       return ApiResponse.error(res, 'orderId is required', [], 400);
     }
-    const invoice = await createInvoiceFromOrder(orderId, req.user?.id);
+    const invoice = await createInvoiceFromOrder(orderId, req.user);
     return ApiResponse.success(res, invoice, 'GST Tax invoice generated successfully', 201);
   } catch (err) {
     next(err);

@@ -1,0 +1,3 @@
+Invoice No,Date,Customer,Taxable,CGST,SGST,Total,Paid,Outstanding,Status
+"INV-0016","","Retailer A","4750","118.75","118.75","4987.5","0","4987.5","Unpaid"
+"INV-0015","2025-01-21","Retailer A","7500","187.5","187.5","7875","4000","3875","Partially Paid"

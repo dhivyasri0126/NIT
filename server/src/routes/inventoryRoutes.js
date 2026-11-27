@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../config/database.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
 const router = Router();
@@ -124,8 +125,8 @@ router.get('/ledger', authenticateToken, async (req, res, next) => {
   }
 });
 
-// POST stock adjustment
-router.post('/adjustments', authenticateToken, async (req, res, next) => {
+// POST stock adjustment (Admin, Supervisor, Owner only; Salesman and Auditor cannot adjust stock)
+router.post('/adjustments', authenticateToken, authorizeRoles('ADMIN', 'SUPERVISOR', 'OWNER'), async (req, res, next) => {
   try {
     const { itemId, itemType, adjustmentType, quantity, reason } = req.body;
     const qtyNum = parseFloat(quantity);

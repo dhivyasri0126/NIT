@@ -17,7 +17,8 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { exportReportToPDF } from '../../utils/exportUtils';
 
 export const PurchasesList = () => {
-  const { purchases, suppliers, materials, createPurchase } = useERP();
+  const { purchases, suppliers, materials, createPurchase, currentUser } = useERP();
+  const canCreatePurchase = ['admin', 'supervisor', 'owner'].includes(currentUser?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('All');
   const [showNewPoModal, setShowNewPoModal] = useState(false);
@@ -75,13 +76,15 @@ export const PurchasesList = () => {
       title="Purchase Inward Register"
       subtitle="Procurement vouchers, supplier raw material receipts, and inventory updates"
       actions={
-        <button
-          onClick={() => setShowNewPoModal(true)}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Purchase Entry</span>
-        </button>
+        canCreatePurchase ? (
+          <button
+            onClick={() => setShowNewPoModal(true)}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Purchase Entry</span>
+          </button>
+        ) : null
       }
     >
       <div className="bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-card space-y-6">

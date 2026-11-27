@@ -16,7 +16,8 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { StatCard } from '../../components/common/StatCard';
 
 export const PaymentsReceivables = () => {
-  const { invoices, payments, recordPayment, customers, ageing } = useERP();
+  const { invoices, payments, recordPayment, customers, ageing, currentUser } = useERP();
+  const canRecordPayment = currentUser?.id === 'admin' || currentUser?.id === 'owner';
   const [activeTab, setActiveTab] = useState('Receivables');
   const [showPayModal, setShowPayModal] = useState(false);
   const [selectedInvNo, setSelectedInvNo] = useState(invoices[0]?.invoiceNo || 'INV-0015');
@@ -48,13 +49,15 @@ export const PaymentsReceivables = () => {
       title="Payments & Customer Receivables"
       subtitle="Track customer credit limits, invoices, collections, and ageing analysis"
       actions={
-        <button
-          onClick={() => setShowPayModal(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all"
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>Record Collection Entry</span>
-        </button>
+        canRecordPayment ? (
+          <button
+            onClick={() => setShowPayModal(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Record Collection Entry</span>
+          </button>
+        ) : null
       }
     >
       <div className="space-y-6">

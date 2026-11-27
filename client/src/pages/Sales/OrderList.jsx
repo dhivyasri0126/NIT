@@ -18,7 +18,8 @@ import { Layout } from '../../components/common/Layout';
 import { StatusBadge } from '../../components/common/StatusBadge';
 
 export const OrderList = () => {
-  const { orders, approveOrder, rejectOrder, generateInvoiceForOrder, dispatchOrder, products } = useERP();
+  const { orders, approveOrder, rejectOrder, generateInvoiceForOrder, dispatchOrder, products, currentUser } = useERP();
+  const canManageOrders = currentUser?.id === 'admin' || currentUser?.id === 'owner';
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('All');
@@ -156,8 +157,8 @@ export const OrderList = () => {
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        {/* Order Verification & Action Buttons */}
-                        {order.status === 'Submitted' && (
+                        {/* Order Verification & Action Buttons (Admin / Owner only) */}
+                        {canManageOrders && order.status === 'Submitted' && (
                           <>
                             <button
                               onClick={() => approveOrder(order.id)}
@@ -176,7 +177,7 @@ export const OrderList = () => {
                           </>
                         )}
 
-                        {order.status === 'Approved' && (
+                        {canManageOrders && order.status === 'Approved' && (
                           <button
                             onClick={() => handleInvoice(order.id)}
                             className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-semibold flex items-center gap-1 shadow-xs transition-all"
@@ -187,7 +188,7 @@ export const OrderList = () => {
                           </button>
                         )}
 
-                        {order.status === 'Invoiced' && (
+                        {canManageOrders && order.status === 'Invoiced' && (
                           <button
                             onClick={() => dispatchOrder(order.id)}
                             className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1 shadow-xs transition-all"

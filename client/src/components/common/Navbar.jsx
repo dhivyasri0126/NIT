@@ -188,6 +188,23 @@ export const Navbar = ({ onOpenSidebar, onOpenSearch }) => {
                   </div>
                 ))}
               </div>
+
+              <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
+                <a
+                  href="/"
+                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <span>Public Landing Page</span>
+                  <span>→</span>
+                </a>
+                <a
+                  href="/login"
+                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                >
+                  <span>Sign Out / Switch User</span>
+                  <span>⎋</span>
+                </a>
+              </div>
             </div>
           )}
         </div>
@@ -249,6 +266,23 @@ export const Navbar = ({ onOpenSidebar, onOpenSearch }) => {
                     )}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
+                <a
+                  href="/"
+                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <span>Public Landing Page</span>
+                  <span>→</span>
+                </a>
+                <a
+                  href="/login"
+                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                >
+                  <span>Sign Out / Switch User</span>
+                  <span>⎋</span>
+                </a>
               </div>
             </div>
           )}

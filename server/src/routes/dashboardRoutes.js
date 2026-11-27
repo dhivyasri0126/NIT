@@ -12,12 +12,12 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
     const ordersStatsRes = await query(`
       SELECT
         COUNT(id) as total_orders,
-        COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_orders,
+        COUNT(CASE WHEN status = 'Submitted' THEN 1 END) as pending_orders,
         COUNT(CASE WHEN status = 'Approved' THEN 1 END) as approved_orders,
         COUNT(CASE WHEN status = 'Invoiced' THEN 1 END) as invoiced_orders,
-        COUNT(CASE WHEN dispatch_status = 'Dispatched' THEN 1 END) as dispatched_orders,
+        COUNT(CASE WHEN status = 'Dispatched' THEN 1 END) as dispatched_orders,
         COALESCE(SUM(total_amount), 0) as total_order_value,
-        COALESCE(SUM(CASE WHEN status = 'Pending' THEN total_amount ELSE 0 END), 0) as pending_order_value
+        COALESCE(SUM(CASE WHEN status = 'Submitted' THEN total_amount ELSE 0 END), 0) as pending_order_value
       FROM erp.orders
     `);
 
@@ -64,7 +64,7 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
 
     // 6. Recent orders
     const recentOrdersRes = await query(`
-      SELECT id, order_no, customer_name, order_date, total_amount, status, dispatch_status
+      SELECT id, order_no, customer_name, order_date, total_amount, status
       FROM erp.orders
       ORDER BY order_date DESC, created_at DESC
       LIMIT 5

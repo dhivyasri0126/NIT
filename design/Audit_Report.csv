@@ -1,0 +1,2 @@
+InvoiceNo,Date,Customer,Taxable,CGST,SGST,Total,Status
+"INV-0015","2025-01-21","Retailer A","7500","187.5","187.5","7875","Partially Paid"

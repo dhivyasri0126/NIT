@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { query } from '../config/database.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
 const router = Router();
 
 // GET Sales register with customer breakdowns
-router.get('/sales', authenticateToken, async (req, res, next) => {
+router.get('/sales', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SALESMAN'), async (req, res, next) => {
   try {
     const { startDate, endDate, customerId } = req.query;
     let sql = `
@@ -15,18 +16,24 @@ router.get('/sales', authenticateToken, async (req, res, next) => {
         o.order_no,
         o.order_date,
         o.customer_name,
-        o.salesman_name,
+        u.name as salesman_name,
         o.status,
         o.taxable_amount,
         o.cgst_total,
         o.sgst_total,
+        o.igst_total,
         o.total_amount,
-        o.invoice_no,
-        o.dispatch_status
+        o.invoice_no
       FROM erp.orders o
+      LEFT JOIN erp.users u ON o.salesman_id = u.id
       WHERE 1=1
     `;
     const params = [];
+
+    if (req.user.role === 'SALESMAN') {
+      params.push(req.user.id);
+      sql += ` AND o.salesman_id = $${params.length}`;
+    }
     if (customerId) {
       params.push(customerId);
       sql += ` AND o.customer_id = $${params.length}`;
@@ -49,7 +56,7 @@ router.get('/sales', authenticateToken, async (req, res, next) => {
 });
 
 // GET Purchase register with supplier details
-router.get('/purchases', authenticateToken, async (req, res, next) => {
+router.get('/purchases', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SUPERVISOR'), async (req, res, next) => {
   try {
     const purchasesRes = await query(`
       SELECT
@@ -84,7 +91,7 @@ router.get('/purchases', authenticateToken, async (req, res, next) => {
 });
 
 // GET Inventory status & movements
-router.get('/inventory', authenticateToken, async (req, res, next) => {
+router.get('/inventory', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SUPERVISOR'), async (req, res, next) => {
   try {
     const invRes = await query(`
       SELECT
@@ -111,7 +118,7 @@ router.get('/inventory', authenticateToken, async (req, res, next) => {
 });
 
 // GET Production yield summary
-router.get('/production', authenticateToken, async (req, res, next) => {
+router.get('/production', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SUPERVISOR'), async (req, res, next) => {
   try {
     const prodRes = await query(`
       SELECT
@@ -139,7 +146,7 @@ router.get('/production', authenticateToken, async (req, res, next) => {
 });
 
 // GET GST tax summary
-router.get('/gst-summary', authenticateToken, async (req, res, next) => {
+router.get('/gst-summary', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const summaryRes = await query(`
       SELECT
@@ -160,7 +167,7 @@ router.get('/gst-summary', authenticateToken, async (req, res, next) => {
 });
 
 // GET Stock audit summary
-router.get('/stock-summary', authenticateToken, async (req, res, next) => {
+router.get('/stock-summary', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SUPERVISOR'), async (req, res, next) => {
   try {
     const stockRes = await query(`
       SELECT
@@ -178,7 +185,7 @@ router.get('/stock-summary', authenticateToken, async (req, res, next) => {
 });
 
 // GET Material & yield variance report
-router.get('/variance', authenticateToken, async (req, res, next) => {
+router.get('/variance', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SUPERVISOR'), async (req, res, next) => {
   try {
     const varianceRes = await query(`
       SELECT
@@ -203,21 +210,23 @@ router.get('/variance', authenticateToken, async (req, res, next) => {
 });
 
 // GET Product profitability report
-router.get('/costing', authenticateToken, async (req, res, next) => {
+router.get('/costing', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const costingRes = await query(`
       SELECT
         p.id,
         p.name,
-        p.category,
+        pc.name as category,
         p.selling_price,
         p.cost_price,
         ROUND((p.selling_price - p.cost_price)::numeric, 2) as profit_per_unit,
-        ROUND((((p.selling_price - p.cost_price) / p.selling_price) * 100)::numeric, 1) as margin_percent,
-        p.current_stock,
-        ROUND((p.current_stock * p.cost_price)::numeric, 2) as inventory_valuation
+        ROUND((((p.selling_price - p.cost_price) / NULLIF(p.selling_price, 0)) * 100)::numeric, 1) as margin_percent,
+        COALESCE(inv.current_stock, 0) as current_stock,
+        ROUND((COALESCE(inv.current_stock, 0) * p.cost_price)::numeric, 2) as inventory_valuation
       FROM erp.products p
-      ORDER BY margin_percent DESC
+      LEFT JOIN erp.product_categories pc ON p.category_id = pc.id
+      LEFT JOIN erp.inventory_items inv ON inv.item_type = 'FINISHED_GOODS' AND inv.item_id = p.id
+      ORDER BY margin_percent DESC NULLS LAST
     `);
     return ApiResponse.success(res, costingRes.rows, 'Costing and profitability report');
   } catch (err) {
@@ -226,19 +235,18 @@ router.get('/costing', authenticateToken, async (req, res, next) => {
 });
 
 // GET Audit logs
-router.get('/audit-logs', authenticateToken, async (req, res, next) => {
+router.get('/audit-logs', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const logsRes = await query(`
       SELECT
         al.id,
         al.action,
-        al.entity_type,
+        al.module,
         al.entity_id,
-        al.old_values,
-        al.new_values,
+        al.details,
         al.ip_address,
         al.created_at,
-        u.name as user_name,
+        COALESCE(al.user_name, u.name) as user_name,
         u.email as user_email
       FROM erp.audit_logs al
       LEFT JOIN erp.users u ON al.user_id = u.id

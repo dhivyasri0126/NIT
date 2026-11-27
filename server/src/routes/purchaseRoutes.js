@@ -35,8 +35,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
   }
 });
 
-// POST create purchase inward
-router.post('/', authenticateToken, authorizeRoles('ADMIN', 'SUPERVISOR', 'AUDITOR', 'OWNER'), async (req, res, next) => {
+// POST create purchase inward (Factory Admin, Production Supervisor, Owner; Auditor is read-only)
+router.post('/', authenticateToken, authorizeRoles('ADMIN', 'SUPERVISOR', 'OWNER'), async (req, res, next) => {
   try {
     const { supplierId, supplierName, item, quantity, unit, unitPrice, totalAmount, invoiceRef, notes } = req.body;
 

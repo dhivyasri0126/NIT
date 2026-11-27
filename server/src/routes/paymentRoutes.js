@@ -7,7 +7,7 @@ import { ApiResponse } from '../utils/apiResponse.js';
 const router = Router();
 
 // GET all payments
-router.get('/', authenticateToken, async (req, res, next) => {
+router.get('/', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const resPayments = await query(`
       SELECT * FROM erp.payments ORDER BY date DESC, created_at DESC
@@ -19,16 +19,15 @@ router.get('/', authenticateToken, async (req, res, next) => {
 });
 
 // GET customer receivables summary
-router.get('/receivables', authenticateToken, async (req, res, next) => {
+router.get('/receivables', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const receivablesRes = await query(`
       SELECT
         c.id as customer_id,
         c.name as customer_name,
-        c.channel,
         c.city,
+        c.state,
         c.credit_limit,
-        c.credit_days,
         c.outstanding_balance,
         COALESCE(SUM(inv.total), 0) as total_invoiced,
         COALESCE(SUM(inv.paid_amount), 0) as total_paid,
@@ -46,15 +45,14 @@ router.get('/receivables', authenticateToken, async (req, res, next) => {
 });
 
 // GET receivables ageing breakdown (0-30, 31-60, 61-90, >90 days)
-router.get('/ageing', authenticateToken, async (req, res, next) => {
+router.get('/ageing', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
   try {
     const ageingRes = await query(`
       SELECT
         c.id as customer_id,
         c.name as customer_name,
-        c.channel,
+        c.city,
         c.credit_limit,
-        c.credit_days,
         COALESCE(SUM(CASE WHEN CURRENT_DATE - inv.invoice_date <= 30 THEN inv.outstanding_amount ELSE 0 END), 0) as bucket_0_30,
         COALESCE(SUM(CASE WHEN CURRENT_DATE - inv.invoice_date BETWEEN 31 AND 60 THEN inv.outstanding_amount ELSE 0 END), 0) as bucket_31_60,
         COALESCE(SUM(CASE WHEN CURRENT_DATE - inv.invoice_date BETWEEN 61 AND 90 THEN inv.outstanding_amount ELSE 0 END), 0) as bucket_61_90,
@@ -72,7 +70,7 @@ router.get('/ageing', authenticateToken, async (req, res, next) => {
 });
 
 // GET customer payment history by customer id
-router.get('/customers/:id', authenticateToken, async (req, res, next) => {
+router.get('/customers/:id', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'OWNER', 'SALESMAN'), async (req, res, next) => {
   try {
     const custId = req.params.id;
     const historyRes = await query(`
@@ -87,8 +85,8 @@ router.get('/customers/:id', authenticateToken, async (req, res, next) => {
   }
 });
 
-// POST record payment
-router.post('/', authenticateToken, authorizeRoles('ADMIN', 'SALESMAN', 'AUDITOR', 'OWNER'), async (req, res, next) => {
+// POST record payment (Factory Admin / Owner only; Auditor is read-only)
+router.post('/', authenticateToken, authorizeRoles('ADMIN', 'OWNER'), async (req, res, next) => {
   try {
     const { invoiceNo, invoiceId, customerName, amountPaid, paymentMode, referenceNo, notes } = req.body;
 
@@ -142,9 +140,9 @@ router.post('/', authenticateToken, authorizeRoles('ADMIN', 'SALESMAN', 'AUDITOR
 
       // Record audit log
       await client.query(`
-        INSERT INTO erp.audit_logs (user_id, action, entity_type, entity_id, new_values)
-        VALUES ($1, 'RECORD_PAYMENT', 'PAYMENT', $2, $3)
-      `, [req.user?.id || 'USR-ADMIN-01', payId, JSON.stringify({ amountPaid, invoiceNo: inv.invoice_no })]);
+        INSERT INTO erp.audit_logs (user_id, user_name, action, module, entity_id, details)
+        VALUES ($1, $2, 'RECORD_PAYMENT', 'FINANCE', $3, $4)
+      `, [req.user?.id || 'USR-ADMIN-01', req.user?.name || 'Admin', payId, JSON.stringify({ amountPaid, invoiceNo: inv.invoice_no })]);
 
       return payRes.rows[0];
     });

@@ -28,6 +28,9 @@ export const Sidebar = ({ isOpen, onClose }) => {
   const { t } = useLanguage();
   const { currentUser } = useERP();
   const location = useLocation();
+  const role = (currentUser?.id || 'admin').toLowerCase();
+
+  const canAccess = (allowed) => allowed.includes(role);
 
   // Collapsible sub-menus state
   const [openSections, setOpenSections] = useState({
@@ -104,188 +107,218 @@ export const Sidebar = ({ isOpen, onClose }) => {
         {/* Navigation Links */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 scrollbar-thin">
           {/* 1. Dashboard */}
-          <NavLink to="/" end className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+          <NavLink to="/dashboard" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
             <Home className="w-4 h-4 flex-shrink-0" />
             <span>{t('dashboard')}</span>
           </NavLink>
 
           {/* 2. Sales & Orders (Collapsible) */}
-          <div>
-            <button
-              onClick={() => toggleSection('sales')}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="w-4 h-4 flex-shrink-0" />
-                <span>{t('salesAndOrders')}</span>
-              </div>
-              {openSections.sales ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-            {openSections.sales && (
-              <div className="mt-1 space-y-1">
-                <NavLink to="/sales/create-order" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('createOrder')}
-                </NavLink>
-                <NavLink to="/sales/orders" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('orders')}
-                </NavLink>
-                <NavLink to="/sales/invoices" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('invoices')}
-                </NavLink>
-                <NavLink to="/sales/dispatches" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('dispatches')}
-                </NavLink>
-                <NavLink to="/sales/mobile-order" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                  <span>Salesman Quick Capture</span>
-                </NavLink>
-              </div>
-            )}
-          </div>
+          {canAccess(['admin', 'salesman', 'auditor', 'owner']) && (
+            <div>
+              <button
+                onClick={() => toggleSection('sales')}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <ShoppingCart className="w-4 h-4 flex-shrink-0" />
+                  <span>{t('salesAndOrders')}</span>
+                </div>
+                {openSections.sales ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+              {openSections.sales && (
+                <div className="mt-1 space-y-1">
+                  {canAccess(['admin', 'salesman']) && (
+                    <NavLink to="/sales/create-order" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      {t('createOrder')}
+                    </NavLink>
+                  )}
+                  <NavLink to="/sales/orders" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {role === 'salesman' ? 'My Orders' : t('orders')}
+                  </NavLink>
+                  {canAccess(['admin', 'auditor', 'owner']) && (
+                    <NavLink to="/sales/invoices" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      {t('invoices')}
+                    </NavLink>
+                  )}
+                  {canAccess(['admin', 'owner']) && (
+                    <NavLink to="/sales/dispatches" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      {t('dispatches')}
+                    </NavLink>
+                  )}
+                  {canAccess(['admin', 'salesman']) && (
+                    <NavLink to="/sales/mobile-order" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                      <span>Salesman Quick Capture</span>
+                    </NavLink>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 3. Production Management (Collapsible) */}
-          <div>
-            <button
-              onClick={() => toggleSection('production')}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Factory className="w-4 h-4 flex-shrink-0" />
-                <span>{t('productionManagement')}</span>
-              </div>
-              {openSections.production ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-            {openSections.production && (
-              <div className="mt-1 space-y-1">
-                <NavLink to="/production/run" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('productionRun')}
-                </NavLink>
-                <NavLink to="/production/bom" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('bom')}
-                </NavLink>
-                <NavLink to="/production/plan" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('productionPlan')}
-                </NavLink>
-                <NavLink to="/production/history" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('productionHistory')}
-                </NavLink>
-              </div>
-            )}
-          </div>
+          {canAccess(['admin', 'supervisor', 'owner']) && (
+            <div>
+              <button
+                onClick={() => toggleSection('production')}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Factory className="w-4 h-4 flex-shrink-0" />
+                  <span>{t('productionManagement')}</span>
+                </div>
+                {openSections.production ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+              {openSections.production && (
+                <div className="mt-1 space-y-1">
+                  {canAccess(['admin', 'supervisor']) && (
+                    <NavLink to="/production/run" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      {t('productionRun')}
+                    </NavLink>
+                  )}
+                  <NavLink to="/production/bom" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('bom')}
+                  </NavLink>
+                  {canAccess(['admin', 'supervisor']) && (
+                    <NavLink to="/production/plan" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      {t('productionPlan')}
+                    </NavLink>
+                  )}
+                  <NavLink to="/production/history" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('productionHistory')}
+                  </NavLink>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 4. Inventory (Collapsible) */}
-          <div>
-            <button
-              onClick={() => toggleSection('inventory')}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Boxes className="w-4 h-4 flex-shrink-0" />
-                <span>{t('inventory')}</span>
-              </div>
-              {openSections.inventory ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-            {openSections.inventory && (
-              <div className="mt-1 space-y-1">
-                <NavLink to="/inventory" end className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('stockOverview')}
-                </NavLink>
-                <NavLink to="/inventory/raw" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('rawMaterials')}
-                </NavLink>
-                <NavLink to="/inventory/packaging" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('packagingMaterials')}
-                </NavLink>
-                <NavLink to="/inventory/finished" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('finishedGoods')}
-                </NavLink>
-                <NavLink to="/inventory/ledger" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  {t('stockLedger')}
-                </NavLink>
-              </div>
-            )}
-          </div>
+          {canAccess(['admin', 'supervisor', 'auditor', 'owner']) && (
+            <div>
+              <button
+                onClick={() => toggleSection('inventory')}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Boxes className="w-4 h-4 flex-shrink-0" />
+                  <span>{t('inventory')}</span>
+                </div>
+                {openSections.inventory ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+              {openSections.inventory && (
+                <div className="mt-1 space-y-1">
+                  <NavLink to="/inventory" end className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('stockOverview')}
+                  </NavLink>
+                  <NavLink to="/inventory/raw" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('rawMaterials')}
+                  </NavLink>
+                  <NavLink to="/inventory/packaging" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('packagingMaterials')}
+                  </NavLink>
+                  <NavLink to="/inventory/finished" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('finishedGoods')}
+                  </NavLink>
+                  <NavLink to="/inventory/ledger" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    {t('stockLedger')}
+                  </NavLink>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 5. Purchases */}
-          <NavLink to="/purchases" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-            <Truck className="w-4 h-4 flex-shrink-0" />
-            <span>{t('purchases')}</span>
-          </NavLink>
+          {canAccess(['admin', 'supervisor', 'auditor', 'owner']) && (
+            <NavLink to="/purchases" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+              <Truck className="w-4 h-4 flex-shrink-0" />
+              <span>{t('purchases')}</span>
+            </NavLink>
+          )}
 
           {/* 6. Product Costing */}
-          <NavLink to="/costing" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-            <DollarSign className="w-4 h-4 flex-shrink-0" />
-            <span>{t('productCosting')}</span>
-          </NavLink>
+          {canAccess(['admin', 'auditor', 'owner']) && (
+            <NavLink to="/costing" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+              <DollarSign className="w-4 h-4 flex-shrink-0" />
+              <span>{t('productCosting')}</span>
+            </NavLink>
+          )}
 
           {/* 7. Payments & Receivables */}
-          <NavLink to="/payments" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-            <Receipt className="w-4 h-4 flex-shrink-0" />
-            <span>{t('paymentsReceivables')}</span>
-          </NavLink>
+          {canAccess(['admin', 'auditor', 'owner']) && (
+            <NavLink to="/payments" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+              <Receipt className="w-4 h-4 flex-shrink-0" />
+              <span>{t('paymentsReceivables')}</span>
+            </NavLink>
+          )}
 
           {/* 8. Reports & Audit */}
-          <NavLink to="/reports" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-            <BarChart3 className="w-4 h-4 flex-shrink-0" />
-            <span>{t('reportsAudit')}</span>
-          </NavLink>
+          {canAccess(['admin', 'auditor', 'owner']) && (
+            <NavLink to="/reports" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+              <BarChart3 className="w-4 h-4 flex-shrink-0" />
+              <span>{t('reportsAudit')}</span>
+            </NavLink>
+          )}
 
           {/* 9. Master Data */}
-          <div>
-            <button
-              onClick={() => toggleSection('master')}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Database className="w-4 h-4 flex-shrink-0" />
-                <span>{t('masterData')}</span>
-              </div>
-              {openSections.master ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-            {openSections.master && (
-              <div className="mt-1 space-y-1">
-                <NavLink to="/master/products" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  Products Master
-                </NavLink>
-                <NavLink to="/master/customers" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  Customers Master
-                </NavLink>
-                <NavLink to="/master/suppliers" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  Suppliers Master
-                </NavLink>
-                <NavLink to="/master/materials" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  Raw & Packing Master
-                </NavLink>
-                <NavLink to="/master/boms" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                  Standard BOM Master
-                </NavLink>
-              </div>
-            )}
-          </div>
+          {canAccess(['admin']) && (
+            <div>
+              <button
+                onClick={() => toggleSection('master')}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Database className="w-4 h-4 flex-shrink-0" />
+                  <span>{t('masterData')}</span>
+                </div>
+                {openSections.master ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+              {openSections.master && (
+                <div className="mt-1 space-y-1">
+                  <NavLink to="/master/products" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    Products Master
+                  </NavLink>
+                  <NavLink to="/master/customers" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    Customers Master
+                  </NavLink>
+                  <NavLink to="/master/suppliers" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    Suppliers Master
+                  </NavLink>
+                  <NavLink to="/master/materials" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    Raw & Packing Master
+                  </NavLink>
+                  <NavLink to="/master/boms" className={subNavItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    Standard BOM Master
+                  </NavLink>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 10. User Management */}
-          <NavLink to="/users" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
-            <Users className="w-4 h-4 flex-shrink-0" />
-            <span>{t('userManagement')}</span>
-          </NavLink>
+          {canAccess(['admin']) && (
+            <NavLink to="/users" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
+              <Users className="w-4 h-4 flex-shrink-0" />
+              <span>{t('userManagement')}</span>
+            </NavLink>
+          )}
 
           {/* 11. Settings */}
           <NavLink to="/settings" className={navItemClass} onClick={() => window.innerWidth < 1024 && onClose()}>
