@@ -48,10 +48,11 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
     const prodStatsRes = await query(`
       SELECT
         COUNT(id) as total_runs,
-        COALESCE(SUM(planned_output), 0) as total_planned_output,
+        COALESCE(SUM(expected_output), 0) as total_planned_output,
         COALESCE(SUM(actual_output), 0) as total_actual_output,
-        COALESCE(SUM(wastage_qty), 0) as total_wastage,
-        ROUND(COALESCE(AVG(efficiency_percent), 0)::numeric, 1) as avg_efficiency
+        COALESCE(SUM(damaged_pouches), 0) as total_damaged_pouches,
+        COALESCE(SUM(wastage_grams), 0) as total_wastage_grams,
+        ROUND(COALESCE(AVG(yield_variance_percent), 0)::numeric, 2) as avg_yield_variance
       FROM erp.production_runs
     `);
 

@@ -106,14 +106,15 @@ export const LoginPage = () => {
     try {
       // 1. Attempt backend JWT login
       const response = await authService.login(email, password);
+      const token = response?.data?.accessToken || response?.data?.token;
 
-      if (response && response.data?.token) {
-        localStorage.setItem('sri_murukku_token', response.data.token);
+      if (response && token) {
+        localStorage.setItem('sri_murukku_token', token);
         localStorage.setItem('sri_murukku_user', JSON.stringify(response.data.user));
 
         // Find matching role
-        const userRoles = response.data.user.roles || [];
-        const roleName = userRoles[0] ? userRoles[0].toLowerCase() : 'admin';
+        const rawRole = response.data.user.role || response.data.user.roles?.[0] || 'admin';
+        const roleName = rawRole.toLowerCase();
         switchRole(roleName);
 
         if (roleName === 'salesman') {
@@ -122,8 +123,7 @@ export const LoginPage = () => {
           navigate('/dashboard');
         }
       } else {
-        // Fallback demo login
-        handleDemoFallback();
+        setError('Invalid login response from server.');
       }
     } catch (err) {
       console.warn('Backend login notice, falling back to local session if offline:', err);

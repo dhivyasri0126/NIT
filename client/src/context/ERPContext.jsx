@@ -321,8 +321,9 @@ export const ERPProvider = ({ children }) => {
       if (!token) {
         try {
           const authRes = await authService.login(currentUser.email, 'Password@123');
-          if (authRes?.data?.token) {
-            token = authRes.data.token;
+          const fetchedToken = authRes?.data?.accessToken || authRes?.data?.token;
+          if (fetchedToken) {
+            token = fetchedToken;
             localStorage.setItem('sri_murukku_token', token);
           }
         } catch (e) {
@@ -411,8 +412,9 @@ export const ERPProvider = ({ children }) => {
       // Attempt to switch JWT token for this user
       try {
         const authRes = await authService.login(role.email, 'Password@123');
-        if (authRes?.data?.token) {
-          localStorage.setItem('sri_murukku_token', authRes.data.token);
+        const fetchedToken = authRes?.data?.accessToken || authRes?.data?.token;
+        if (fetchedToken) {
+          localStorage.setItem('sri_murukku_token', fetchedToken);
           localStorage.setItem('sri_murukku_user', JSON.stringify(authRes.data.user));
         }
       } catch (err) {

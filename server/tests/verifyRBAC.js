@@ -23,7 +23,7 @@ async function runRBACTests() {
   const login = async (email) => {
     const r = await req('POST', '/api/v1/auth/login', null, { email, password: 'Password@123' });
     if (r.status !== 200) throw new Error(`Login failed for ${email}: ${JSON.stringify(r)}`);
-    return r.data.data.token;
+    return r.data.data.accessToken;
   };
 
   try {

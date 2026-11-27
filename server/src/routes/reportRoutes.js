@@ -123,18 +123,19 @@ router.get('/production', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 
     const prodRes = await query(`
       SELECT
         pr.id,
-        pr.run_number,
+        pr.run_no,
         pr.batch_no,
         pr.product_name,
         pr.date,
-        pr.planned_output,
+        pr.expected_output,
         pr.actual_output,
-        pr.wastage_qty,
-        pr.efficiency_percent,
+        pr.damaged_pouches,
+        pr.wastage_grams,
+        pr.yield_variance_percent,
         pr.supervisor_name,
         pr.status,
-        po.total_cost,
-        po.unit_cost
+        po.total_manufacturing_cost as total_cost,
+        po.cost_per_packet as unit_cost
       FROM erp.production_runs pr
       LEFT JOIN erp.production_overheads po ON pr.id = po.production_run_id
       ORDER BY pr.date DESC
@@ -196,7 +197,7 @@ router.get('/variance', authenticateToken, authorizeRoles('ADMIN', 'AUDITOR', 'O
         pmi.unit_id,
         pmi.planned_qty,
         pmi.actual_qty,
-        pmi.variance_qty,
+        pmi.difference_qty as variance_qty,
         pmi.variance_percent,
         (pmi.variance_percent > 3.0 OR pmi.variance_percent < -3.0) as is_significant_variance
       FROM erp.production_material_issues pmi
